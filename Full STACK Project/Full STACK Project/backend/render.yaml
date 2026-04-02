@@ -1,0 +1,55 @@
+services:
+  - type: web
+    name: tribalcraft-connect
+    runtime: docker
+    dockerfilePath: ./Dockerfile
+    envVars:
+      - key: PORT
+        value: 8080
+      - key: SPRING_DATASOURCE_URL
+        sync: false
+      - key: SPRING_DATASOURCE_USERNAME
+        sync: false
+      - key: SPRING_DATASOURCE_PASSWORD
+        sync: false
+      # Legacy aliases (kept for backward compatibility)
+      - key: DB_URL
+        sync: false
+      - key: DB_USERNAME
+        sync: false
+      - key: DB_PASSWORD
+        sync: false
+      - key: APP_JWT_SECRET
+        generateValue: true
+      - key: APP_RECAPTCHA_ENABLED
+        value: true
+      - key: APP_RECAPTCHA_SITE_KEY
+        sync: false
+      - key: APP_RECAPTCHA_SECRET_KEY
+        sync: false
+      # Legacy aliases (kept for backward compatibility)
+      - key: JWT_SECRET
+        sync: false
+      - key: RECAPTCHA_ENABLED
+        sync: false
+      - key: RECAPTCHA_SITE_KEY
+        sync: false
+      - key: RECAPTCHA_SECRET_KEY
+        sync: false
+      - key: APP_SUPABASE_URL
+        sync: false
+      - key: APP_SUPABASE_SERVICE_ROLE_KEY
+        sync: false
+      - key: APP_SUPABASE_BUCKET_NAME
+        sync: false
+      - key: APP_CORS_ALLOWED_ORIGINS
+        sync: false
+      # Legacy aliases (kept for backward compatibility)
+      - key: SUPABASE_URL
+        sync: false
+      - key: SUPABASE_SERVICE_ROLE_KEY
+        sync: false
+      - key: SUPABASE_BUCKET_NAME
+        sync: false
+      - key: CORS_ALLOWED_ORIGINS
+        sync: false
