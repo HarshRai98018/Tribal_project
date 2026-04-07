@@ -6,7 +6,7 @@ const { useEffect, useMemo, useState, useCallback } = React;
 // Leave empty ("") when backend serves the frontend (same origin)
 // ---------------------------------------------------------------------------
 function resolveApiBaseUrl() {
-  const DEFAULT_RENDER_API = "https://tribal-project-backend.onrender.com";
+  const DEFAULT_AZURE_API = "https://tribal-craft-api-feczhkg7gehfazhs.centralindia-01.azurewebsites.net";
 
   if (window.TC_API_BASE_URL && typeof window.TC_API_BASE_URL === "string") {
     return window.TC_API_BASE_URL.replace(/\/$/, "");
@@ -16,18 +16,16 @@ function resolveApiBaseUrl() {
     if (stored && typeof stored === "string") return stored.replace(/\/$/, "");
   }
 
-  // Frontend-only dev servers (Vite/Live Server/serve) usually run on these ports.
-  // In that case, default API to backend on :8080.
-  const devPorts = new Set(["5173", "5500", "3000"]);
-  const { protocol, hostname, port } = window.location;
-  if (devPorts.has(port)) {
-    return `${protocol}//${hostname}:8080`;
-  }
-  if (hostname.endsWith(".vercel.app")) {
-    return DEFAULT_RENDER_API;
+  // Use the Azure backend as the default for cloud-connected environments
+  if (
+    window.location.hostname.endsWith(".vercel.app") ||
+    window.location.hostname.includes("localhost") ||
+    window.location.hostname.includes("azurewebsites.net")
+  ) {
+    return DEFAULT_AZURE_API;
   }
 
-  // When served by Spring Boot, keep same-origin.
+  // Default to same-origin for other cases
   return "";
 }
 
@@ -113,6 +111,7 @@ function App() {
   const [authMode, setAuthMode] = useState("login");
   const [captchaToken, setCaptchaToken] = useState("");
   const [recaptchaSiteKey, setRecaptchaSiteKey] = useState("");
+  const [backendWakeState, setBackendWakeState] = useState("starting");
 
   const [authForm, setAuthForm] = useState({
     name: "",
@@ -280,16 +279,35 @@ function App() {
   useEffect(() => { hydrateUser(); }, []);
 
   useEffect(() => {
+    if (user) return undefined;
+
+    let active = true;
+    let timerId = null;
+
     const loadPublicConfig = async () => {
       try {
+        if (active) {
+          setBackendWakeState((prev) => (prev === "ready" ? prev : "starting"));
+        }
         const res = await apiFetch("/api/public/config");
-        if (!res.ok) return;
+        if (!res.ok) throw new Error("Backend not ready yet");
         const data = await res.json();
+        if (!active) return;
         setRecaptchaSiteKey(data.recaptchaSiteKey || "");
-      } catch { /* ignore */ }
+        setBackendWakeState("ready");
+      } catch {
+        if (!active) return;
+        setBackendWakeState("starting");
+        timerId = window.setTimeout(loadPublicConfig, 5000);
+      }
     };
     loadPublicConfig();
-  }, [apiFetch]);
+
+    return () => {
+      active = false;
+      if (timerId) window.clearTimeout(timerId);
+    };
+  }, [apiFetch, user]);
 
   useEffect(() => { if (user) fetchBootstrap(); }, [user]);
 
@@ -338,12 +356,18 @@ function App() {
 
   useEffect(() => {
     if (user && !isInvoiceRoute && !coreReady) {
-      loadComponents([
+      const corePaths = [
         "/components/HeroBanner.jsx",
         "/components/DashboardMetrics.jsx",
         "/components/CraftCatalog.jsx",
         "/components/PaymentGatewayModal.jsx"
-      ]).then(() => setCoreReady(true));
+      ];
+
+      if (user.role === "customer") {
+        corePaths.push("/components/CartCheckout.jsx", "/components/ReviewsPanel.jsx");
+      }
+
+      loadComponents(corePaths).then(() => setCoreReady(true));
     }
   }, [user, isInvoiceRoute, coreReady]);
 
@@ -695,6 +719,7 @@ function App() {
         authMode={authMode}
         authForm={authForm}
         error={error}
+        backendWakeState={backendWakeState}
         onAuthInput={onAuthInput}
         handleLogin={handleLogin}
         handleSignup={handleSignup}
@@ -743,6 +768,25 @@ function App() {
 
         <DashboardMetrics cards={cards} user={user} loading={loading} />
 
+        <>
+            {role === "customer" && window.TC.CartCheckout && (
+              <window.TC.CartCheckout
+                cart={cart}
+                cartTotal={cartTotal}
+                paymentForm={paymentForm}
+                setPaymentForm={setPaymentForm}
+                checkout={checkout}
+                updateCartQty={updateCartQty}
+                removeFromCart={removeFromCart}
+                promotions={promotions}
+                payments={payments}
+                user={user}
+                money={money}
+                downloadInvoice={downloadInvoice}
+              />
+            )}
+        </>
+
         <CraftCatalog
           filteredProducts={filteredProducts}
           loading={loading}
@@ -761,22 +805,6 @@ function App() {
         />
 
         <>
-            {role === "customer" && rolePanelsReady && window.TC.CartCheckout && (
-              <window.TC.CartCheckout
-                cart={cart}
-                cartTotal={cartTotal}
-                paymentForm={paymentForm}
-                setPaymentForm={setPaymentForm}
-                checkout={checkout}
-                updateCartQty={updateCartQty}
-                removeFromCart={removeFromCart}
-                promotions={promotions}
-                payments={payments}
-                user={user}
-                money={money}
-                downloadInvoice={downloadInvoice}
-              />
-            )}
 
             {role === "artisan" && (
               <>
@@ -870,7 +898,7 @@ function App() {
               </>
             )}
 
-            {role === "customer" && rolePanelsReady && window.TC.ReviewsPanel && (
+            {role === "customer" && window.TC.ReviewsPanel && (
               <window.TC.ReviewsPanel
                 reviewForm={reviewForm}
                 setReviewForm={setReviewForm}
